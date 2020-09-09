@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -575,18 +576,29 @@ func (r *Request) sendRequest() (sendErr error) {
 	defer r.Handlers.CompleteAttempt.Run(r)
 
 	r.Retryable = nil
+	start := time.Now()
 	r.Handlers.Send.Run(r)
 	if r.Error != nil {
+		if latency := time.Since(start).Milliseconds(); latency > 100 {
+			log.Printf("[AWS DEBUG LOG] r.Handlers.Send.Run(r) Send Error | start %s | latency %d \n", start.Format(time.RFC3339), latency)
+		}
+
 		debugLogReqError(r, "Send Request",
 			fmtAttemptCount(r.RetryCount, r.MaxRetries()),
 			r.Error)
 		return r.Error
+	}
+	if latency := time.Since(start).Milliseconds(); latency > 100 {
+		log.Printf("[AWS DEBUG LOG] r.Handlers.Send.Run(r) Send Success | start %s | latency %d \n", start.Format(time.RFC3339), latency)
 	}
 
 	r.Handlers.UnmarshalMeta.Run(r)
 	r.Handlers.ValidateResponse.Run(r)
 	if r.Error != nil {
 		r.Handlers.UnmarshalError.Run(r)
+		if latency := time.Since(start).Milliseconds(); latency > 100 {
+			log.Printf("[AWS DEBUG LOG] sendRequest() UnmarshalMeta Error | start %s | latency %d \n", start.Format(time.RFC3339), latency)
+		}
 		debugLogReqError(r, "Validate Response",
 			fmtAttemptCount(r.RetryCount, r.MaxRetries()),
 			r.Error)
@@ -595,12 +607,18 @@ func (r *Request) sendRequest() (sendErr error) {
 
 	r.Handlers.Unmarshal.Run(r)
 	if r.Error != nil {
+		if latency := time.Since(start).Milliseconds(); latency > 100 {
+			log.Printf("[AWS DEBUG LOG] sendRequest() Unmarshal Error | start %s | latency %d \n", start.Format(time.RFC3339), latency)
+		}
 		debugLogReqError(r, "Unmarshal Response",
 			fmtAttemptCount(r.RetryCount, r.MaxRetries()),
 			r.Error)
 		return r.Error
 	}
 
+	if latency := time.Since(start).Milliseconds(); latency > 100 {
+		log.Printf("[AWS DEBUG LOG] sendRequest() Success | start %s | latency %d \n", start.Format(time.RFC3339), latency)
+	}
 	return nil
 }
 
